@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reservas de Salas - Parroquia</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .time-slot { transition: background-color 0.3s, transform 0.2s; }
+        .time-slot:hover:not(.disabled) { transform: scale(1.05); cursor: pointer; }
+        .modal { display: none; }
+        .modal.active { display: flex; }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: auto repeat(7, 1fr);
+            gap: 4px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 max-w-7xl">
+
+        <header class="text-center mb-6">
+            <h1 class="text-3xl md:text-4xl font-bold text-indigo-600">Sistema de Reservas de Salas</h1>
+            <p class="text-gray-500 mt-1">Parroquia San Carlos Borromeo <br> Villanueva de la cañada</p>
+        </header>
+
+        <div id="auth-container" class="text-center mb-4 p-2">
+            <button id="login-button" class="px-4 py-2 bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition">Iniciar sesión con Google</button>
+            <div id="user-info" class="p-2 bg-indigo-100 border border-indigo-200 rounded-lg hidden mt-2">
+                <p class="text-sm text-indigo-800">Has iniciado sesión como: <strong id="user-name-display"></strong></p>
+                <button id="logout-button" class="mt-2 px-3 py-1 bg-red-500 text-white text-xs rounded-md hover:bg-red-600 transition">Cerrar sesión</button>
+            </div>
+        </div>
+
+        <div id="room-selector" class="flex justify-center flex-wrap gap-2 mb-6"></div>
+
+        <div class="flex justify-between items-center mb-4">
+            <button id="prev-week" class="px-4 py-2 bg-white rounded-lg shadow-md hover:bg-gray-200 transition">- Semana Anterior</button>
+            <h2 id="current-week-info" class="text-lg md:text-xl font-semibold text-center"></h2>
+            <button id="next-week" class="px-4 py-2 bg-white rounded-lg shadow-md hover:bg-gray-200 transition">Semana Siguiente +</button>
+        </div>
+
+        <div id="calendar-container" class="bg-white p-4 rounded-lg shadow-lg overflow-x-auto">
+            <div id="calendar-grid" class="calendar-grid"></div>
+            <div id="loading" class="text-center p-8">
+                <p class="text-gray-500">Cargando calendario...</p>
+            </div>
+        </div>
+        
+        <div class="mt-4 flex justify-center items-center gap-4 flex-wrap text-sm">
+            <div class="flex items-center gap-2"><div class="w-4 h-4 rounded bg-green-200"></div><span>Disponible</span></div>
+            <div class="flex items-center gap-2"><div class="w-4 h-4 rounded bg-red-300"></div><span>Reservado por otro</span></div>
+            <div class="flex items-center gap-2"><div class="w-4 h-4 rounded bg-blue-300"></div><span>**Tu reserva** (clic para editar)</span></div>
+            <div class="flex items-center gap-2"><div class="w-4 h-4 rounded bg-gray-300"></div><span>No disponible</span></div>
+        </div>
+    </div>
+
+    <div id="booking-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-2xl p-6 w-full max-w-md">
+            <h3 class="text-2xl font-bold mb-4">Confirmar Reserva</h3>
+            <p class="mb-1"><strong>Sala:</strong> <span id="modal-room-name"></span></p>
+            <p class="mb-4"><strong>Fecha y Hora:</strong> <span id="modal-date-time"></span></p>
+            
+            <form id="booking-form">
+                <div class="mb-4">
+                    <label for="group-name" class="block text-sm font-medium text-gray-700 mb-1">Nombre del Grupo</label>
+                    <input type="text" id="group-name" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="mb-4">
+                    <label for="responsible-name" class="block text-sm font-medium text-gray-700 mb-1">Responsable</label>
+                    <input type="text" id="responsible-name" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="mb-4">
+                    <label for="responsible-phone" class="block text-sm font-medium text-gray-700 mb-1">Teléfono del Responsable</label>
+                    <input type="tel" id="responsible-phone" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="mb-4">
+                    <label for="event-title" class="block text-sm font-medium text-gray-700 mb-1">Nombre del Evento</label>
+                    <input type="text" id="event-title" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="mb-6">
+                    <label for="end-time" class="block text-sm font-medium text-gray-700 mb-1">Hora de Finalización</label>
+                    <select id="end-time" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"></select>
+                </div>
+                <div class="flex justify-end gap-3">
+                    <button type="button" id="cancel-booking" class="px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Confirmar Reserva</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="edit-delete-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-2xl p-6 w-full max-w-md">
+            <h3 class="text-2xl font-bold mb-4">Modificar Reserva</h3>
+            <p class="mb-1"><strong>Sala:</strong> <span id="edit-room-name"></span></p>
+            <p class="mb-4"><strong>Fecha y Hora:</strong> <span id="edit-date-time"></span></p>
+            
+            <form id="edit-form">
+                <div class="mb-4">
+                    <label for="edit-group-name" class="block text-sm font-medium text-gray-700 mb-1">Nombre del Grupo</label>
+                    <input type="text" id="edit-group-name" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="mb-4">
+                    <label for="edit-responsible-name" class="block text-sm font-medium text-gray-700 mb-1">Responsable</label>
+                    <input type="text" id="edit-responsible-name" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="mb-4">
+                    <label for="edit-responsible-phone" class="block text-sm font-medium text-gray-700 mb-1">Teléfono del Responsable</label>
+                    <input type="tel" id="edit-responsible-phone" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="mb-4">
+                    <label for="edit-event-title" class="block text-sm font-medium text-gray-700 mb-1">Nombre del Evento</label>
+                    <input type="text" id="edit-event-title" required class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div class="flex justify-between items-center gap-3 mt-6">
+                    <button type="button" id="delete-booking" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">Eliminar Reserva</button>
+                    <div class="flex gap-3">
+                        <button type="button" id="cancel-edit" class="px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300">Cancelar</button>
+                        <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Guardar Cambios</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, getDocs, onSnapshot, addDoc, query, where, setDoc, updateDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- CONFIGURACIÓN DE FIREBASE ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAt8s5SCFuzcIj7pvLXrgymiEAUIB41tXI",
+            authDomain: "reservasalas-300c4.firebaseapp.com",
+            projectId: "reservasalas-300c4",
+            storageBucket: "reservasalas-300c4.firebasestorage.app",
+            messagingSenderId: "689286977213",
+            appId: "1:689286977213:web:434ffaeefe3765a17089d4"
+        };
+        
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        const appId = firebaseConfig.projectId;
+
+        // --- DATOS INICIALES Y CONSTANTES ---
+        const initialRooms = [
+            { id: 'salon_de_actos', name: 'Salón de Actos', capacity: 50 },
+            { id: 'capilla', name: 'Capilla', capacity: 30 },
+            { id: 'salon_sofas', name: 'Salón Sofás', capacity: 20 },
+            { id: 'pecera', name: 'Pecera', capacity: 10},
+            { id: 'templo', name: 'Templo', capacity: 200},
+            { id: 'san_juan_pablo', name: 'S. Juan Pablo II', capacity: 50},
+            { id: 's_teresita', name: 'S. Teresita', capacity: 50},
+            { id: 's_felipe_neri', name: 'S. Felipe Neri', capacity: 50},
+            { id: 'caritas', name: 'Local de Caritas', capacity: 50},
+            { id: 'san_juan_pablo', name: 'S. Juan Pablo II', capacity: 50},
+        ];
+        
+        const recurringBookings = [
+            { startTime: '19:00', endTime: '20:30', eventTitle: 'Misa', roomId: 'templo', dayOfWeek: 'all', isBlocked: true },
+            { startTime: '08:00', endTime: '12:00', eventTitle: 'Adoración', roomId: 'templo', dayOfWeek: 4, isBlocked: true },
+            { startTime: '14:00', endTime: '15:30', eventTitle: 'Limpieza', roomId: 'all', dayOfWeek: 'all', isBlocked: true },
+            { startTime: '09:00', endTime: '12:00', eventTitle: 'Actividad de Lunes', roomId: 'templo', dayOfWeek: 1, isBlocked: true },
+        ];
+
+        // --- ESTADO DE LA APLICACIÓN ---
+        let currentUser = null;
+        let rooms = [];
+        let selectedRoomId = null;
+        let currentWeekStart = getStartOfWeek(new Date());
+        let allReservationsForWeek = []; 
+        let recurringReservations = [];
+        let currentReservationDetails = null;
+        let unsubscribeReservations = null; // Variable corregida
+
+        // --- CONSTANTES Y UTILIDADES ---
+        const TIME_SLOTS = generateTimeSlots('09:00', '22:00');
+        
+        // --- ELEMENTOS DEL DOM ---
+        const roomSelector = document.getElementById('room-selector');
+        const calendarGrid = document.getElementById('calendar-grid');
+        const loadingDiv = document.getElementById('loading');
+        const currentWeekInfo = document.getElementById('current-week-info');
+        
+        // --- FUNCIÓN PRINCIPAL DE INICIO ---
+        async function main() {
+            setupEventListeners();
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    currentUser = { uid: user.uid, name: user.displayName || "Usuario" };
+                    document.getElementById('user-name-display').textContent = currentUser.name;
+                    document.getElementById('user-info').classList.remove('hidden');
+                    document.getElementById('login-button').classList.add('hidden');
+                    
+                    await loadInitialData();
+                    if (rooms.length > 0 && !selectedRoomId) {
+                        selectRoom(rooms[0].id);
+                    }
+                } else {
+                    currentUser = null;
+                    document.getElementById('user-info').classList.add('hidden');
+                    document.getElementById('login-button').classList.remove('hidden');
+                    calendarGrid.innerHTML = `<p class="text-center p-8 col-span-8">Por favor, inicia sesión para ver las reservas.</p>`;
+                    roomSelector.innerHTML = '';
+                    if (unsubscribeReservations) unsubscribeReservations();
+                }
+            });
+        }
+        
+        // --- GESTIÓN DE DATOS INICIALES ---
+        async function loadInitialData() {
+            const roomsRef = collection(db, `artifacts/${appId}/public/data/rooms`);
+            const roomsSnapshot = await getDocs(roomsRef);
+            
+            if (roomsSnapshot.empty) {
+                console.log("Base de datos de salas vacía. Creando datos iniciales...");
+                const batch = writeBatch(db);
+                initialRooms.forEach(room => {
+                    batch.set(doc(roomsRef, room.id), room);
+                });
+                await batch.commit();
+                console.log("Salas iniciales creadas.");
+            }
+            
+            rooms = roomsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            renderRoomSelector();
+
+            // Carga las reservas recurrentes una sola vez si no existen
+            const recurringQuery = query(collection(db, `artifacts/${appId}/public/data/reservations`), where('date', '==', null));
+            const recurringSnapshot = await getDocs(recurringQuery);
+            if (recurringSnapshot.empty) {
+                const batch = writeBatch(db);
+                recurringBookings.forEach(booking => {
+                    batch.set(doc(collection(db, `artifacts/${appId}/public/data/reservations`)), {...booking, date: null});
+                });
+                await batch.commit();
+                console.log("Reservas recurrentes iniciales creadas.");
+            }
+            const updatedRecurringSnapshot = await getDocs(recurringQuery);
+            recurringReservations = updatedRecurringSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        }
+
+        function renderRoomSelector() {
+            roomSelector.innerHTML = '';
+            rooms.forEach(room => {
+                const button = document.createElement('button');
+                button.textContent = room.name;
+                button.dataset.roomId = room.id;
+                button.className = `px-4 py-2 rounded-lg transition font-medium ${
+                    room.id === selectedRoomId 
+                    ? 'bg-indigo-600 text-white shadow-lg' 
+                    : 'bg-white text-indigo-600 hover:bg-indigo-100'
+                }`;
+                button.onclick = () => selectRoom(room.id);
+                roomSelector.appendChild(button);
+            });
+        }
+
+        function selectRoom(roomId) {
+            selectedRoomId = roomId;
+            renderRoomSelector();
+            renderCalendar();
+        }
+
+        // --- GESTIÓN DEL CALENDARIO ---
+        function renderCalendar() {
+            if (!selectedRoomId || !currentUser) return;
+            
+            loadingDiv.style.display = 'block';
+            calendarGrid.style.display = 'none';
+            updateWeekInfo();
+
+            if (unsubscribeReservations) unsubscribeReservations();
+
+            const weekEnd = new Date(currentWeekStart);
+            weekEnd.setDate(weekEnd.getDate() + 6);
+            
+            const reservationsQuery = query(
+                collection(db, `artifacts/${appId}/public/data/reservations`),
+                where('roomId', 'in', [selectedRoomId, 'all']),
+                where('date', '>=', formatDate(currentWeekStart)),
+                where('date', '<=', formatDate(weekEnd))
+            );
+            
+            unsubscribeReservations = onSnapshot(reservationsQuery, (snapshot) => {
+                const datedReservations = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                allReservationsForWeek = [...datedReservations, ...recurringReservations];
+                generateCalendarGrid();
+            }, (error) => {
+                console.error("Error al escuchar reservas:", error);
+                alert("Error al cargar el calendario. Por favor, revisa la consola para más detalles.");
+                calendarGrid.innerHTML = `<p class="text-red-500 text-center col-span-8">Error al cargar el calendario.</p>`;
+            });
+        }
+
+        function generateCalendarGrid() {
+            loadingDiv.style.display = 'none';
+            calendarGrid.style.display = 'grid';
+            calendarGrid.innerHTML = '';
+            
+            const corner = document.createElement('div');
+            calendarGrid.appendChild(corner);
+            const daysOfWeek = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+            for (let i = 0; i < 7; i++) {
+                const day = new Date(currentWeekStart);
+                day.setDate(day.getDate() + i);
+                const dayHeader = document.createElement('div');
+                dayHeader.className = 'text-center font-bold p-2 sticky top-0 bg-white z-10';
+                dayHeader.innerHTML = `${daysOfWeek[day.getDay()]} <br> <span class="font-normal text-sm">${day.getDate()}</span>`;
+                calendarGrid.appendChild(dayHeader);
+            }
+
+            TIME_SLOTS.forEach(hour => {
+                const hourCell = document.createElement('div');
+                hourCell.textContent = hour;
+                hourCell.className = 'text-center text-sm font-semibold p-2 sticky left-0 bg-white z-10';
+                calendarGrid.appendChild(hourCell);
+
+                for (let i = 0; i < 7; i++) {
+                    const day = new Date(currentWeekStart);
+                    day.setDate(day.getDate() + i);
+                    const dateStr = formatDate(day);
+                    const dayIndex = day.getDay();
+
+                    const slot = document.createElement('div');
+                    slot.className = 'time-slot p-2 rounded-md border text-xs min-h-[30px]';
+                    slot.dataset.time = hour;
+                    slot.dataset.date = dateStr;
+
+                    const currentMinutes = timeToMinutes(hour);
+                    
+                    const reservation = allReservationsForWeek.find(r => {
+                        const isForCorrectRoom = r.roomId === selectedRoomId || r.roomId === 'all';
+                        if (!isForCorrectRoom) return false;
+
+                        const isRecurrent = r.date === null;
+                        const isTimeSlotInside = currentMinutes >= timeToMinutes(r.startTime) && currentMinutes < timeToMinutes(r.endTime);
+
+                        if (isRecurrent) {
+                            return (r.dayOfWeek === 'all' || r.dayOfWeek === dayIndex) && isTimeSlotInside;
+                        } else {
+                            return r.date === dateStr && isTimeSlotInside;
+                        }
+                    });
+                    
+                    if (reservation) {
+                        const isBlocked = reservation.isBlocked;
+                        const isMine = reservation.createdBy === currentUser.uid;
+
+                        if (isBlocked) {
+                            slot.className += ' bg-gray-300 disabled text-gray-600';
+                            slot.innerHTML = `<p class="font-semibold">${reservation.eventTitle}</p>`;
+                        } else if (isMine) {
+                            slot.className += ' bg-blue-300 hover:bg-blue-400 cursor-pointer';
+                            slot.innerHTML = `<p class="font-bold">${reservation.eventTitle}</p><p>(${reservation.responsibleName})</p>`;
+                            slot.onclick = () => openEditDeleteModal(reservation);
+                        } else {
+                            slot.className += ' bg-red-300 disabled text-red-800';
+                            slot.innerHTML = `<p class="font-bold">${reservation.groupName}</p><p>(${reservation.responsibleName})</p>`;
+                        }
+                    } else {
+                        slot.className += ' bg-green-200 hover:bg-green-300';
+                        slot.onclick = () => openBookingModal(dateStr, hour);
+                    }
+                    calendarGrid.appendChild(slot);
+                }
+            });
+        }
+        
+        // --- GESTIÓN DE MODALES Y FORMULARIOS ---
+        function openBookingModal(date, time) {
+            document.getElementById('booking-modal').classList.add('active');
+            const roomName = rooms.find(r => r.id === selectedRoomId).name;
+            document.getElementById('modal-room-name').textContent = roomName;
+            document.getElementById('modal-date-time').textContent = `${date} a las ${time}`;
+            
+            document.getElementById('group-name').value = '';
+            document.getElementById('responsible-name').value = currentUser.name;
+            document.getElementById('responsible-phone').value = '';
+            document.getElementById('event-title').value = '';
+            
+            const startMinutes = timeToMinutes(time);
+            const endTimeSelect = document.getElementById('end-time');
+            endTimeSelect.innerHTML = '';
+            for (let i = startMinutes + 15; i <= timeToMinutes('22:00'); i += 15) {
+                const option = document.createElement('option');
+                option.value = minutesToTime(i);
+                option.textContent = minutesToTime(i);
+                endTimeSelect.appendChild(option);
+            }
+            
+            currentReservationDetails = { date, time };
+        }
+        
+        async function handleBookingSubmit(e) {
+            e.preventDefault();
+            
+            const { date, time } = currentReservationDetails;
+            const endTime = document.getElementById('end-time').value;
+            
+            if (!date || !time || !endTime) {
+                alert("Por favor, selecciona una hora de finalización.");
+                return;
+            }
+            
+            const groupName = document.getElementById('group-name').value;
+            const responsibleName = document.getElementById('responsible-name').value;
+            const responsiblePhone = document.getElementById('responsible-phone').value;
+            const eventTitle = document.getElementById('event-title').value;
+
+            const reservation = {
+                date,
+                startTime: time,
+                endTime,
+                roomId: selectedRoomId,
+                groupName,
+                responsibleName,
+                responsiblePhone,
+                eventTitle,
+                createdBy: currentUser.uid,
+                createdByName: currentUser.name,
+                isBlocked: false
+            };
+
+            try {
+                await addDoc(collection(db, `artifacts/${appId}/public/data/reservations`), reservation);
+                alert('Reserva confirmada con éxito!');
+                closeModal('booking-modal');
+            } catch (e) {
+                console.error("Error al añadir la reserva: ", e);
+                alert('Error al confirmar la reserva.');
+            }
+        }
+
+        function openEditDeleteModal(reservation) {
+            document.getElementById('edit-delete-modal').classList.add('active');
+            document.getElementById('edit-room-name').textContent = rooms.find(r => r.id === selectedRoomId).name;
+            document.getElementById('edit-date-time').textContent = `${reservation.date} de ${reservation.startTime} a ${reservation.endTime}`;
+            
+            document.getElementById('edit-group-name').value = reservation.groupName;
+            document.getElementById('edit-responsible-name').value = reservation.responsibleName;
+            document.getElementById('edit-responsible-phone').value = reservation.responsiblePhone;
+            document.getElementById('edit-event-title').value = reservation.eventTitle;
+            
+            currentReservationDetails = { id: reservation.id };
+        }
+
+        async function handleEditSubmit(e) {
+            e.preventDefault();
+            
+            const reservationId = currentReservationDetails.id;
+            if (!reservationId) return;
+
+            const updatedData = {
+                groupName: document.getElementById('edit-group-name').value,
+                responsibleName: document.getElementById('edit-responsible-name').value,
+                responsiblePhone: document.getElementById('edit-responsible-phone').value,
+                eventTitle: document.getElementById('edit-event-title').value,
+            };
+
+            const reservationRef = doc(db, `artifacts/${appId}/public/data/reservations`, reservationId);
+            try {
+                await updateDoc(reservationRef, updatedData);
+                alert('Reserva actualizada con éxito!');
+                closeModal('edit-delete-modal');
+            } catch (e) {
+                console.error("Error al actualizar la reserva:", e);
+                alert('Error al actualizar la reserva.');
+            }
+        }
+
+        async function handleDeleteClick() {
+            const reservationId = currentReservationDetails.id;
+            if (confirm("¿Estás seguro de que quieres eliminar esta reserva?")) {
+                const reservationRef = doc(db, `artifacts/${appId}/public/data/reservations`, reservationId);
+                try {
+                    await deleteDoc(reservationRef);
+                    alert('Reserva eliminada con éxito.');
+                    closeModal('edit-delete-modal');
+                } catch (e) {
+                    console.error("Error al eliminar la reserva:", e);
+                    alert('Error al eliminar la reserva.');
+                }
+            }
+        }
+        
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+            currentReservationDetails = null;
+        }
+
+        // --- NAVEGACIÓN Y UTILIDADES ---
+        function getStartOfWeek(date) {
+            const d = new Date(date);
+            const day = d.getDay();
+            const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+            d.setHours(0, 0, 0, 0);
+            return new Date(d.setDate(diff));
+        }
+
+        function formatDate(date) {
+            return date.toISOString().split('T')[0];
+        }
+
+        function timeToMinutes(time) {
+            if (!time) return 0;
+            const [hours, minutes] = time.split(':').map(Number);
+            return hours * 60 + minutes;
+        }
+
+        function minutesToTime(minutes) {
+            const h = Math.floor(minutes / 60).toString().padStart(2, '0');
+            const m = (minutes % 60).toString().padStart(2, '0');
+            return `${h}:${m}`;
+        }
+        
+        function generateTimeSlots(start, end) {
+            const slots = [];
+            const startMinutes = timeToMinutes(start);
+            const endMinutes = timeToMinutes(end);
+            for (let i = startMinutes; i < endMinutes; i += 15) {
+                slots.push(minutesToTime(i));
+            }
+            return slots;
+        }
+
+        function updateWeekInfo() {
+            const end = new Date(currentWeekStart);
+            end.setDate(end.getDate() + 6);
+            const options = { month: 'long', day: 'numeric' };
+            document.getElementById('current-week-info').textContent = 
+                `${currentWeekStart.toLocaleDateString('es-ES', options)} - ${end.toLocaleDateString('es-ES', {...options, year: 'numeric'})}`;
+        }
+
+        // --- EVENT LISTENERS ---
+        function setupEventListeners() {
+            document.getElementById('prev-week').addEventListener('click', () => {
+                currentWeekStart.setDate(currentWeekStart.getDate() - 7);
+                renderCalendar();
+            });
+
+            document.getElementById('next-week').addEventListener('click', () => {
+                currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+                renderCalendar();
+            });
+
+            document.getElementById('login-button').addEventListener('click', () => signInWithPopup(auth, new GoogleAuthProvider()));
+            document.getElementById('logout-button').addEventListener('click', () => signOut(auth));
+            
+            document.getElementById('booking-form').addEventListener('submit', handleBookingSubmit);
+            document.getElementById('cancel-booking').addEventListener('click', () => closeModal('booking-modal'));
+
+            document.getElementById('edit-form').addEventListener('submit', handleEditSubmit);
+            document.getElementById('cancel-edit').addEventListener('click', () => closeModal('edit-delete-modal'));
+            document.getElementById('delete-booking').addEventListener('click', handleDeleteClick);
+        }
+
+        // --- INICIO DE LA APP ---
+        document.addEventListener('DOMContentLoaded', main);
+
+    </script>
+</body>
+</html>
